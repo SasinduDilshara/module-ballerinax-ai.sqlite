@@ -22,7 +22,7 @@ plugins {
     id 'io.ballerina.plugin'
 }
 
-description = 'Ai.sqlite - Ballerina'
+description = 'SQLite-backed short-term chat message store - Ballerina'
 
 def packageName = "ai.sqlite"
 def packageOrg = "ballerinax"
@@ -73,6 +73,26 @@ task commitTomlFiles {
     }
 }
 
+// SQLite is an in-process / file-based database; there is no server to start
+// or stop. These tasks exist for parity with the other memory connectors and
+// for any test that wants to clean up its scratch database file.
+tasks.register('startSqliteServer') {
+    doLast {
+        println "SQLite is embedded; no server to start."
+    }
+}
+
+tasks.register('stopSqliteServer') {
+    doLast {
+        def cmd = Os.isFamily(Os.FAMILY_WINDOWS) ? ['cmd', '/c'] : ['sh', '-c']
+        exec {
+            ignoreExitValue = true
+            commandLine cmd + ["rm -f test-chat-memory.db test-chat-memory.db-journal"]
+        }
+        println "Removed SQLite test scratch files (if any)."
+    }
+}
+
 publishing {
     publications {
         maven(MavenPublication) {
@@ -98,3 +118,5 @@ clean {
 build.dependsOn "generatePomFileForMavenPublication"
 publishToMavenLocal.dependsOn build
 publish.dependsOn build
+test.dependsOn "startSqliteServer"
+test.finalizedBy "stopSqliteServer"
