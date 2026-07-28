@@ -57,7 +57,7 @@ import ballerinax/java.jdbc;
     ai:ShortTermMemoryStore store = check new sqliteStore:ShortTermMemoryStore(jdbcClient);
     ```
 
-    Optionally, specify the maximum number of messages to store per key (`maxMessagesPerKey` - defaults to `20`), the configuration for the in-memory cache for messages (`cacheConfig` - defaults to no cache), and/or the table name (`tableName` - defaults to `"chat_messages"`).
+    Optionally, specify the maximum number of messages to store per key (`maxMessagesPerKey` - defaults to `20`) and/or the table name (`tableName` - defaults to `"chat_messages"`).
 
     ```ballerina
     ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore(

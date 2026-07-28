@@ -109,31 +109,6 @@ isolated function createAIPrompt(string[] & readonly strings, anydata[] & readon
     public final anydata[] & readonly insertions = insertions;
 };
 
-isolated function mapToImmutableMessage(ai:ChatMessage message) returns readonly & ai:ChatMessage {
-    if message is ai:ChatSystemMessage {
-        final ai:Prompt|string content = message.content;
-        readonly & ai:Prompt|string memoryContent =
-            getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
-        return {role: message.role, content: memoryContent, name: message.name};
-    }
-    return mapToMemoryChatInteractiveMessage(<ai:ChatInteractiveMessage>message);
-}
-
-isolated function mapToMemoryChatInteractiveMessage(ai:ChatInteractiveMessage message) returns
-        readonly & ai:ChatInteractiveMessage {
-    if message is ai:ChatAssistantMessage|ai:ChatFunctionMessage {
-        return message.cloneReadOnly();
-    }
-    final ai:Prompt|string content = message.content;
-    readonly & ai:Prompt|string memoryContent =
-        getPromptContent(content is string ? content : [content.strings, content.insertions.cloneReadOnly()]);
-
-    return {role: message.role, content: memoryContent, name: message.name};
-}
-
-isolated function getPromptContent(string|([string[], anydata[]] & readonly) content) returns string|(ai:Prompt & readonly) =>
-    content is string ? content : createAIPrompt(content[0], content[1]);
-
 type DatabaseRecord record {|
     string message_json;
     json...;
