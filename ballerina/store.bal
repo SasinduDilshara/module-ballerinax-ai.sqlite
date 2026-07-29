@@ -385,40 +385,53 @@ public isolated class ShortTermMemoryStore {
 
     private isolated function loadFromDatabase(string key)
             returns readonly & ([ai:ChatSystemMessage, ai:ChatInteractiveMessage...]|ai:ChatInteractiveMessage[])|Error {
-        do {
-            stream<DatabaseRecord, sql:Error?> messages = self.dbClient->query(
-                replaceTableNamePlaceholder(`
-                    SELECT message_json
-                    FROM $_tableName_$
-                    WHERE message_key = ${key}
-                    ORDER BY id ASC`, self.tableName
-                )
-            );
-            (ai:ChatSystemMessage & readonly)? systemMessage = ();
-            (ai:ChatInteractiveMessage & readonly)[] interactiveMessages = [];
+        stream<DatabaseRecord, sql:Error?> messages = self.dbClient->query(
+            replaceTableNamePlaceholder(`
+                SELECT message_json
+                FROM $_tableName_$
+                WHERE message_key = ${key}
+                ORDER BY id ASC`, self.tableName
+            )
+        );
+        // The rows are collected before they are parsed: a `check`/`return` inside a query
+        // `do` clause returns from this function outright, leaving the stream open. The
+        // internally created pool holds a single connection, so a leaked stream would render
+        // the store permanently unusable.
+        string[]|sql:Error rawMessages = from DatabaseRecord {message_json} in messages
+            select message_json;
 
-            check from DatabaseRecord {message_json} in messages
-                do {
-                    ChatMessageDatabaseMessage|error dbMessage = message_json.fromJsonStringWithType();
-                    if dbMessage is error {
-                        return error("Failed to parse chat message from database: " + dbMessage.message(), dbMessage);
-                    }
+        // Closing is idempotent, and covers the paths on which the query itself did not
+        // drain the stream.
+        sql:Error? closeResult = messages.close();
 
-                    if dbMessage is ChatSystemMessageDatabaseMessage {
-                        systemMessage = transformFromSystemMessageDatabaseMessage(dbMessage);
-                    } else {
-                        interactiveMessages.push(transformFromInteractiveMessageDatabaseMessage(
-                                <ChatInteractiveMessageDatabaseMessage>dbMessage));
-                    }
-                };
-
-            if systemMessage is () {
-                return interactiveMessages.cloneReadOnly();
-            }
-            return [systemMessage, ...interactiveMessages];
-        } on fail error err {
-            return error("Failed to retrieve chat messages: " + err.message(), err);
+        if rawMessages is sql:Error {
+            return error("Failed to retrieve chat messages: " + rawMessages.message(), rawMessages);
         }
+        if closeResult is sql:Error {
+            return error("Failed to retrieve chat messages: " + closeResult.message(), closeResult);
+        }
+
+        (ai:ChatSystemMessage & readonly)? systemMessage = ();
+        (ai:ChatInteractiveMessage & readonly)[] interactiveMessages = [];
+
+        foreach string rawMessage in rawMessages {
+            ChatMessageDatabaseMessage|error dbMessage = rawMessage.fromJsonStringWithType();
+            if dbMessage is error {
+                return error("Failed to parse chat message from database: " + dbMessage.message(), dbMessage);
+            }
+
+            if dbMessage is ChatSystemMessageDatabaseMessage {
+                systemMessage = transformFromSystemMessageDatabaseMessage(dbMessage);
+            } else {
+                interactiveMessages.push(transformFromInteractiveMessageDatabaseMessage(
+                        <ChatInteractiveMessageDatabaseMessage>dbMessage));
+            }
+        }
+
+        if systemMessage is () {
+            return interactiveMessages.cloneReadOnly();
+        }
+        return [systemMessage, ...interactiveMessages];
     }
 
     # Counts the interactive (non-system) messages currently stored for a given key.

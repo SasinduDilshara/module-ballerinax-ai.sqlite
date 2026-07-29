@@ -5,8 +5,7 @@ This module provides a SQLite-backed short-term memory store to use with AI mess
 ### Key Features
 
 - SQLite-backed persistent storage for short-term AI message memory (file or in-memory database)
-- Configurable per-key limit on the number of interactive messages, enforced on insertion
-- Built-in in-memory caching for improved read performance
+- Configurable per-key capacity (`maxMessagesPerKey`), reported through `isFull()` and `getCapacity()`; overflow is handled by `ai:ShortTermMemory` (trimming or summarization), not by the store
 - Support for both direct database configuration and an existing `jdbc:Client`
 - Zero external service dependencies — SQLite runs in-process via the bundled JDBC driver
 
@@ -60,9 +59,7 @@ import ballerinax/java.jdbc;
     Optionally, specify the maximum number of messages to store per key (`maxMessagesPerKey` - defaults to `20`) and/or the table name (`tableName` - defaults to `"chat_messages"`).
 
     ```ballerina
-    ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore(
-        {url}, 10, {capacity: 10}
-    );
+    ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore({url}, 10, "my_chat_messages");
     ```
 
 > **Note on database URLs**: The connector uses `ballerinax/java.jdbc` under the hood. The `org.xerial:sqlite-jdbc` driver is already declared as a platform dependency of this module, so no additional JAR setup is required. Use `jdbc:sqlite:<path>` for a file-backed database or `jdbc:sqlite::memory:` for an in-process database.

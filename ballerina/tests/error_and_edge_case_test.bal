@@ -418,6 +418,40 @@ function testGetAllWithUnparsableRow() returns error? {
     check cl.close();
 }
 
+@test:Config {}
+function testStoreRemainsUsableAfterUnparsableRow() returns error? {
+    // A failed read must not leak the open result stream: the pool holds a single
+    // connection, so a leaked stream would block every later operation until the
+    // connection timeout elapses and leave the store permanently unusable.
+    jdbc:Client cl = check newIsolatedClient();
+    ShortTermMemoryStore store = check new (cl);
+    check store.put(K1, K1M1);
+    _ = check cl->execute(`INSERT INTO chat_messages (message_key, message_role, message_json)
+        VALUES (${K1}, 'user', '{{ broken')`);
+
+    var firstRead = store.getAll(K1);
+    if firstRead !is Error {
+        test:assertFail("Expected a parse error for a malformed interactive message row");
+    }
+
+    // The same failure must be reported again, promptly, rather than a pool timeout.
+    var secondRead = store.getAll(K1);
+    if secondRead !is Error {
+        test:assertFail("Expected the parse error to repeat on the second read");
+    }
+    test:assertTrue(secondRead.message().includes("Failed to parse chat message from database"),
+            "Unexpected error message: " + secondRead.message());
+
+    // Writes and reads over an unaffected key must still work.
+    check store.put(K2, K2M1);
+    check assertAllMessages(store, K2, [K2M1]);
+
+    // Removing the malformed row restores reads for the affected key.
+    _ = check cl->execute(`DELETE FROM chat_messages WHERE message_json = '{{ broken'`);
+    check assertAllMessages(store, K1, [K1M1]);
+    check cl.close();
+}
+
 // =====================================================================
 // `put` with an array of messages
 // =====================================================================
