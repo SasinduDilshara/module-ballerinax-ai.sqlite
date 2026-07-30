@@ -12,6 +12,9 @@ icon = "icon.png"
 [platform.java21]
 graalvmCompatible = true
 
+[build-options]
+observabilityIncluded = true
+
 [[platform.java21.dependency]]
 groupId = "org.xerial"
 artifactId = "sqlite-jdbc"
