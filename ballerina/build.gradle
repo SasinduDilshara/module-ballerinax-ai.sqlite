@@ -84,10 +84,10 @@ tasks.register('startSqliteServer') {
 
 tasks.register('stopSqliteServer') {
     doLast {
-        def cmd = Os.isFamily(Os.FAMILY_WINDOWS) ? ['cmd', '/c'] : ['sh', '-c']
-        exec {
-            ignoreExitValue = true
-            commandLine cmd + ["rm -f test-chat-memory.db test-chat-memory.db-journal"]
+        // Every scratch database the tests create is named `test-*.db`; the `-journal`,
+        // `-wal` and `-shm` sidecars are created by SQLite alongside them.
+        delete fileTree(projectDir) {
+            include 'test-*.db', 'test-*.db-journal', 'test-*.db-wal', 'test-*.db-shm'
         }
         println "Removed SQLite test scratch files (if any)."
     }

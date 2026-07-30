@@ -24,25 +24,30 @@ public type Error distinct ai:MemoryError;
 
 # Database configuration for the SQLite-backed memory store.
 public type DatabaseConfiguration record {|
-    # JDBC URL for the SQLite database (e.g., `jdbc:sqlite:./chat.db`,
-    # `jdbc:sqlite::memory:`, or `jdbc:sqlite:./chat.db?cache=shared`).
+    # JDBC URL for the SQLite database: `jdbc:sqlite:<path>` for a file-backed database
+    # (e.g., `jdbc:sqlite:./chat.db`) or `jdbc:sqlite::memory:` for an in-process one.
     # Must start with `jdbc:sqlite:`.
     string url;
-    # SQLite session-level options applied to each new connection.
+    # SQLite session-level options applied to every connection the store opens.
     Options options = {};
     # Seconds to wait for a connection from the pool before failing.
     decimal connectionTimeout = 30.0;
 |};
 
-# SQLite session-level options applied to each new connection. Any field left
-# unset falls back to SQLite's own default for that PRAGMA.
+# SQLite session-level options, applied as `sqlite-jdbc` driver properties to every
+# connection the store opens. Any field left unset falls back to the driver's default.
 public type Options record {|
-    # Journaling mode (`PRAGMA journal_mode`). When unset, SQLite's default (`DELETE`)
-    # is used. Consider `WAL` for workloads that benefit from concurrent readers.
+    # Journaling mode (`PRAGMA journal_mode`). When unset, the database is left at its own
+    # setting, which is `DELETE` for a newly created file-backed database. `WAL` is recorded
+    # in the database file itself and so persists for every later connection, whereas the
+    # other modes apply per connection. This option has no effect on a `jdbc:sqlite::memory:`
+    # database, whose journal mode is always `MEMORY`.
     JournalMode journalMode?;
-    # Milliseconds SQLite waits when the database is locked before returning `SQLITE_BUSY`
-    # (`PRAGMA busy_timeout`). When unset, SQLite's default (`0`, fail immediately) is used.
-    # Set a positive value to give a competing writer time to release the lock.
+    # Milliseconds SQLite waits for a lock held by another connection before failing with
+    # `SQLITE_BUSY` (`PRAGMA busy_timeout`). When unset, the `sqlite-jdbc` driver's default of
+    # `3000` applies, which is not the same as SQLite's own default of `0`; set `0` explicitly
+    # to fail immediately. Because the store pins its pool to a single connection, this only
+    # affects contention with other connections or processes using the same database file.
     int busyTimeout?;
 |};
 
@@ -95,11 +100,11 @@ public isolated class ShortTermMemoryStore {
                 maxOpenConnections: 1,
                 minIdleConnections: 1,
                 maxConnectionLifeTime: 0,
-                connectionTimeout: dbClient.connectionTimeout,
-                connectionInitSql: buildInitSqlStatements(dbClient.options)
+                connectionTimeout: dbClient.connectionTimeout
             };
             jdbc:Client|sql:Error initializedClient = new jdbc:Client(
                 url = dbClient.url,
+                options = {properties: buildDriverProperties(dbClient.options)},
                 connectionPool = pool
             );
             if initializedClient is sql:Error {
@@ -486,15 +491,19 @@ isolated function getLatestSystemMessage(ai:ChatSystemMessage[] systemMessages) 
     return count == 0 ? () : systemMessages[count - 1];
 }
 
-isolated function buildInitSqlStatements(Options options) returns string[] {
-    string[] statements = [];
+// The options are applied as `sqlite-jdbc` driver properties rather than through the pool's
+// `connectionInitSql`, because only the first statement of that array is ever executed: with
+// both options set, the second one would be dropped without any error. Driver properties are
+// applied by the driver to every connection it opens, not just to the first one.
+isolated function buildDriverProperties(Options options) returns map<anydata> {
+    map<anydata> properties = {};
     JournalMode? journalMode = options?.journalMode;
     if journalMode is JournalMode {
-        statements.push(string `PRAGMA journal_mode = ${journalMode}`);
+        properties["journal_mode"] = journalMode;
     }
     int? busyTimeout = options?.busyTimeout;
     if busyTimeout is int {
-        statements.push(string `PRAGMA busy_timeout = ${busyTimeout}`);
+        properties["busy_timeout"] = busyTimeout;
     }
-    return statements;
+    return properties;
 }

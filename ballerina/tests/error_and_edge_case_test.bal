@@ -364,6 +364,30 @@ function testIsFullFailure() returns error? {
     check cl.close();
 }
 
+@test:Config {}
+function testStoreRecoversOnceTheTableIsRestored() returns error? {
+    // Every operation above fails against the missing table. None of those failures may
+    // consume the pool's only connection, so once the table is back the same store instance
+    // must work again without being recreated.
+    var [store, cl] = check newStoreWithMissingTable();
+
+    // Exercise a read, a write and a delete, so all three statement paths have failed.
+    test:assertTrue(store.put(K1, K1M1) is Error, "Expected the write to fail");
+    test:assertTrue(store.getAll(K1) is Error, "Expected the read to fail");
+    test:assertTrue(store.removeAll(K1) is Error, "Expected the delete to fail");
+    test:assertTrue(store.isFull(K1) is Error, "Expected the count to fail");
+
+    // Recreating the table is enough; the store holds no cached state of its own.
+    ShortTermMemoryStore _ = check new (cl, tableName = "vanishing");
+
+    check store.put(K1, [K1SM1, K1M1]);
+    check assertAllMessages(store, K1, [K1SM1, K1M1]);
+    test:assertFalse(check store.isFull(K1));
+    check store.removeAll(K1);
+    check assertAllMessages(store, K1, []);
+    check cl.close();
+}
+
 // =====================================================================
 // Malformed rows written outside the store
 // =====================================================================
@@ -381,7 +405,20 @@ function testGetChatSystemMessageWithUnparsableRow() returns error? {
     }
     test:assertTrue(result.message().startsWith("Failed to parse chat message from database: "),
             "Unexpected error message: " + result.message());
+
+    // The failed read must not have left anything behind: the pool holds a single connection,
+    // so a leaked statement or result set would wedge every later operation.
+    check assertStoreIsStillUsable(store);
     check cl.close();
+}
+
+// Asserts that a store which has just returned an error can still be written to and read
+// from. Any error path that skips this check is how a connection leak goes unnoticed.
+function assertStoreIsStillUsable(ShortTermMemoryStore store) returns error? {
+    check store.put(K3, K2M1);
+    check assertAllMessages(store, K3, [K2M1]);
+    check store.removeAll(K3);
+    check assertAllMessages(store, K3, []);
 }
 
 @test:Config {}
@@ -398,6 +435,8 @@ function testGetChatSystemMessageWithSchemaMismatchedRow() returns error? {
     }
     test:assertTrue(result.message().startsWith("Failed to parse chat message from database: "),
             "Unexpected error message: " + result.message());
+
+    check assertStoreIsStillUsable(store);
     check cl.close();
 }
 
@@ -415,6 +454,8 @@ function testGetAllWithUnparsableRow() returns error? {
     }
     test:assertTrue(result.message().includes("Failed to parse chat message from database"),
             "Unexpected error message: " + result.message());
+
+    check assertStoreIsStillUsable(store);
     check cl.close();
 }
 

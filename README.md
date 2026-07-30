@@ -55,7 +55,7 @@ import ballerinax/java.jdbc;
     ai:ShortTermMemoryStore store = check new sqliteStore:ShortTermMemoryStore(jdbcClient);
     ```
 
-    Optionally, specify the maximum number of messages to store per key (`maxMessagesPerKey` - defaults to `20`) and/or the table name (`tableName` - defaults to `"chat_messages"`).
+    Optionally, specify the maximum number of interactive messages to keep per key (`maxMessagesPerKey` - defaults to `20`) and/or the table name (`tableName` - defaults to `"chat_messages"`).
 
     ```ballerina
     ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore({url}, 10, "my_chat_messages");
@@ -63,7 +63,31 @@ import ballerinax/java.jdbc;
 
 > **Note on database URLs**: The connector uses `ballerinax/java.jdbc` under the hood. The `org.xerial:sqlite-jdbc` driver is already declared as a platform dependency of this module, so no additional JAR setup is required. Use `jdbc:sqlite:<path>` for a file-backed database or `jdbc:sqlite::memory:` for an in-process database.
 
-> **Note on table naming**: The `tableName` argument is validated against `^[A-Za-z_][A-Za-z0-9_]*$` and inlined unquoted into SQL. SQLite preserves identifier case but compares identifiers case-insensitively.
+> **Note on table naming**: The `tableName` argument is validated against `^[A-Za-z_][A-Za-z0-9_]*$` and inlined unquoted into SQL. SQLite preserves identifier case but compares identifiers case-insensitively, so casing in `tableName` is round-tripped but does not affect lookups.
+
+## Configuration
+
+When the store is created from a `DatabaseConfiguration` record rather than from an existing `jdbc:Client`, the following fields are available:
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `url` | `string` | *(required)* | JDBC URL for the database. Must start with `jdbc:sqlite:`. |
+| `options.journalMode` | `sqlite:JournalMode` | *(unset)* | `PRAGMA journal_mode`. One of `DELETE`, `TRUNCATE`, `PERSIST`, `MEMORY`, `WAL`, `OFF`. |
+| `options.busyTimeout` | `int` (milliseconds) | `3000`, from the driver | `PRAGMA busy_timeout`. |
+| `connectionTimeout` | `decimal` (seconds) | `30.0` | How long a caller waits for the store's connection before failing. |
+
+The `options` record is applied as `org.xerial:sqlite-jdbc` driver properties, so it takes effect on every connection the store opens.
+
+- **`journalMode`** — `WAL` is recorded in the database file itself, so it persists for every later connection; it is the mode to choose when more than one connection or process uses the same file. The remaining modes apply per connection. A newly created file-backed database is at SQLite's default of `DELETE`. This option has no effect on a `jdbc:sqlite::memory:` database, whose journal mode is always `MEMORY`.
+- **`busyTimeout`** — the number of milliseconds SQLite waits for a lock held by another connection before failing with `SQLITE_BUSY`. When left unset, the `sqlite-jdbc` driver applies `3000`; note that this is **not** SQLite's own default of `0`. Set `0` explicitly to fail immediately instead of waiting.
+
+```ballerina
+ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore({
+    url: "jdbc:sqlite:./chat_memory.db",
+    options: {journalMode: "WAL", busyTimeout: 5000},
+    connectionTimeout: 15
+});
+```
 
 ## Build from the source
 
@@ -78,11 +102,7 @@ import ballerinax/java.jdbc;
 
 2. Download and install [Ballerina Swan Lake](https://ballerina.io/).
 
-3. Download and install [Docker](https://www.docker.com/get-started).
-
-   > **Note**: Ensure that the Docker daemon is running before executing any tests.
-
-4. Export Github Personal access token with read package permissions as follows,
+3. Export Github Personal access token with read package permissions as follows,
 
     ```bash
     export packageUser=<Username>
