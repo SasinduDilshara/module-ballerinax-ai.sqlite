@@ -5,15 +5,15 @@ name = "ai.sqlite"
 version = "1.0.0"
 license = ["Apache-2.0"]
 authors = ["Ballerina"]
-icon = "icon.png"
 keywords = ["Type/Connector", "Vendor/SQLite", "Area/AI & Machine Learning", "Area/Database", "Type/Short Term Memory Store", "Name/SQLite Memory Store"]
 repository = "https://github.com/ballerina-platform/module-ballerinax-ai.sqlite"
-
-[build-options]
-observabilityIncluded = true
+icon = "icon.png"
 
 [platform.java21]
 graalvmCompatible = true
+
+[build-options]
+observabilityIncluded = true
 
 [[platform.java21.dependency]]
 groupId = "org.xerial"
