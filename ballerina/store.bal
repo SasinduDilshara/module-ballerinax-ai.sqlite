@@ -55,6 +55,7 @@ public type Options record {|
 public type JournalMode "DELETE"|"TRUNCATE"|"PERSIST"|"MEMORY"|"WAL"|"OFF";
 
 # Represents a SQLite-backed short-term memory store for messages.
+@display {label: "SQLite Short Term Memory Store"}
 public isolated class ShortTermMemoryStore {
     *ai:ShortTermMemoryStore;
 
