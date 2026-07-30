@@ -23,35 +23,43 @@ import ballerinax/java.jdbc;
 public type Error distinct ai:MemoryError;
 
 # Database configuration for the SQLite-backed memory store.
+@display {label: "Database Configuration"}
 public type DatabaseConfiguration record {|
     # JDBC URL for the SQLite database: `jdbc:sqlite:<path>` for a file-backed database
     # (e.g., `jdbc:sqlite:./chat.db`) or `jdbc:sqlite::memory:` for an in-process one.
     # Must start with `jdbc:sqlite:`.
+    @display {label: "URL"}
     string url;
     # SQLite session-level options applied to every connection the store opens.
+    @display {label: "Options"}
     Options options = {};
     # Seconds to wait for a connection from the pool before failing.
+    @display {label: "Connection Timeout"}
     decimal connectionTimeout = 30.0;
 |};
 
 # SQLite session-level options, applied as `sqlite-jdbc` driver properties to every
 # connection the store opens. Any field left unset falls back to the driver's default.
+@display {label: "Options"}
 public type Options record {|
     # Journaling mode (`PRAGMA journal_mode`). When unset, the database is left at its own
     # setting, which is `DELETE` for a newly created file-backed database. `WAL` is recorded
     # in the database file itself and so persists for every later connection, whereas the
     # other modes apply per connection. This option has no effect on a `jdbc:sqlite::memory:`
     # database, whose journal mode is always `MEMORY`.
+    @display {label: "Journal Mode"}
     JournalMode journalMode?;
     # Milliseconds SQLite waits for a lock held by another connection before failing with
     # `SQLITE_BUSY` (`PRAGMA busy_timeout`). When unset, the `sqlite-jdbc` driver's default of
     # `3000` applies, which is not the same as SQLite's own default of `0`; set `0` explicitly
     # to fail immediately. Because the store pins its pool to a single connection, this only
     # affects contention with other connections or processes using the same database file.
+    @display {label: "Busy Timeout"}
     int busyTimeout?;
 |};
 
 # SQLite journaling mode (`PRAGMA journal_mode`).
+@display {label: "Journal Mode"}
 public type JournalMode "DELETE"|"TRUNCATE"|"PERSIST"|"MEMORY"|"WAL"|"OFF";
 
 # Represents a SQLite-backed short-term memory store for messages.
@@ -74,8 +82,8 @@ public isolated class ShortTermMemoryStore {
     # Must start with a letter or underscore and contain only letters, digits, and underscores.
     # + return - An error if the initialization fails
     public isolated function init(@display {label: "Database Connection"} DatabaseConfiguration|jdbc:Client dbConnection,
-            int maxMessagesPerKey = 20,
-            string tableName = "chat_messages") returns Error? {
+            @display {label: "Maximum Messages Per Key"} int maxMessagesPerKey = 20,
+            @display {label: "Table Name"} string tableName = "chat_messages") returns Error? {
         if !regexp:isFullMatch(re `^[A-Za-z_][A-Za-z0-9_]*$`, tableName) {
             return error(string `Invalid table name: '${tableName}'.`
                 + " Table name must start with a letter or underscore, "
