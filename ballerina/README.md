@@ -64,7 +64,7 @@ import ballerinax/java.jdbc;
     ```
 
 > **Note on database URLs**: The connector uses `ballerinax/java.jdbc` under the hood. The `org.xerial:sqlite-jdbc` driver is already declared as a platform dependency of this module, so no additional JAR setup is required. Use `jdbc:sqlite:<path>` for a file-backed database or `jdbc:sqlite::memory:` for an in-process database.
-
+>
 > **Note on table naming**: The `tableName` argument is validated against `^[A-Za-z_][A-Za-z0-9_]*$` and inlined unquoted into SQL. SQLite preserves identifier case but compares identifiers case-insensitively, so casing in `tableName` is round-tripped but does not affect lookups.
 
 ## Configuration
@@ -93,7 +93,7 @@ ai:ShortTermMemoryStore store = check new sqlite:ShortTermMemoryStore({
 
 ## Schema
 
-On initialization, the store creates the following objects in the connected database (using `CREATE … IF NOT EXISTS`, so it is safe to re-run):
+On initialization, the store creates the following objects in the connected database (using `CREATE … IF NOT EXISTS`, so it is safe to re-run). The names below are for the default `tableName` of `"chat_messages"`; with a custom `tableName`, the table and both index names are derived from it (`<tableName>`, `<tableName>_key_id_idx`, and `<tableName>_system_uidx`).
 
 ```sql
 CREATE TABLE chat_messages (
