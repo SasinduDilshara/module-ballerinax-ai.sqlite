@@ -67,13 +67,13 @@ public isolated class ShortTermMemoryStore {
 
     # Initializes the SQLite-backed short-term memory store.
     #
-    # + dbClient - The SQLite JDBC client or database configuration to connect to the database
+    # + dbConnection - The SQLite JDBC client or database configuration to connect to the database
     # + maxMessagesPerKey - The maximum number of interactive messages to store per key (must be a
     # positive integer; default: 20)
     # + tableName - The name of the database table to store chat messages (default: "chat_messages").
     # Must start with a letter or underscore and contain only letters, digits, and underscores.
     # + return - An error if the initialization fails
-    public isolated function init(jdbc:Client|DatabaseConfiguration dbClient,
+    public isolated function init(@display {label: "Database Connection"} DatabaseConfiguration|jdbc:Client dbConnection,
             int maxMessagesPerKey = 20,
             string tableName = "chat_messages") returns Error? {
         if !regexp:isFullMatch(re `^[A-Za-z_][A-Za-z0-9_]*$`, tableName) {
@@ -86,12 +86,12 @@ public isolated class ShortTermMemoryStore {
                 + " It must be a positive integer.");
         }
         self.tableName = tableName;
-        if dbClient is jdbc:Client {
-            self.dbClient = dbClient;
+        if dbConnection is jdbc:Client {
+            self.dbClient = dbConnection;
             self.ownsDbClient = false;
         } else {
-            if !dbClient.url.startsWith("jdbc:sqlite:") {
-                return error(string `Invalid 'url': '${dbClient.url}'.`
+            if !dbConnection.url.startsWith("jdbc:sqlite:") {
+                return error(string `Invalid 'url': '${dbConnection.url}'.`
                     + " SQLite JDBC URLs must start with 'jdbc:sqlite:'.");
             }
             // SQLite is single-writer; the pool is pinned to one connection regardless of
@@ -101,11 +101,11 @@ public isolated class ShortTermMemoryStore {
                 maxOpenConnections: 1,
                 minIdleConnections: 1,
                 maxConnectionLifeTime: 0,
-                connectionTimeout: dbClient.connectionTimeout
+                connectionTimeout: dbConnection.connectionTimeout
             };
             jdbc:Client|sql:Error initializedClient = new jdbc:Client(
-                url = dbClient.url,
-                options = {properties: buildDriverProperties(dbClient.options)},
+                url = dbConnection.url,
+                options = {properties: buildDriverProperties(dbConnection.options)},
                 connectionPool = pool
             );
             if initializedClient is sql:Error {
